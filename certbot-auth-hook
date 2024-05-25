@@ -1,0 +1,11 @@
+#!/bin/sh
+# This script performs the gymnastics to push the validation code to the clipboard 
+# using an apple shortcut
+
+echo "$CERTBOT_DOMAIN: $CERTBOT_VALIDATION"
+VALIDATION_PATH="/Users/mada/.cache/certbot/tmp/validation"
+echo "{\"VALIDATION\":\"$CERTBOT_VALIDATION\", \"DOMAIN\":\"$CERTBOT_DOMAIN\"}" > $VALIDATION_PATH
+cat $VALIDATION_PATH
+/usr/bin/shortcuts run "Auth Hook Notification" --input-path $VALIDATION_PATH
+/bin/rm $VALIDATION_PATH
+read _MY_VAR
