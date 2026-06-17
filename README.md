@@ -1,12 +1,10 @@
 # PKI
 
-## Abstract
-
-This container is a a secure public key infrastructure (PKI) implementation of a certificate authority. The purpose of this implementation is to provide a mechanism for clients to use certificate authentication and server transport layer security (TLS) encryption using [Let's Encrypt](https://letsencrypt.org).
+This container is a a secure public key infrastructure (PKI) implementation of a certificate authority (CA). The purpose of this implementation is to provide a mechanism for clients to use certificate authentication and server transport layer security (TLS) encryption using [Let's Encrypt](https://letsencrypt.org).
 
 This implementation uses an [encrypted virtual disk](https://gitlab.com/cryptsetup/cryptsetup) to hold all of the secure bits. 
 
-Generally, this container is a collection of scripts that are used for managing the PKI/CA.  
+Generally, this container is a collection of scripts that are used for managing the PKI and CA  
 
 ### Client
 
@@ -66,18 +64,62 @@ These were part of trying to use [easypki](https://github.com/google/easypki) as
 - **ca-revoke**: Creates a revokation list 
 - pki-export: Originally ment to export cert/key pairs to pfx.
 
-## Development
+## Notes
 
 - Error with 10M container "https://superuser.com/questions/1557750/why-does-cryptsetup-fail-with-container-10m-in-size"
 - Reference: https://wiki.alpinelinux.org/wiki/LVM_on_LUKS
 - [Manpage](https://www.man7.org/linux/man-pages/man8/cryptsetup.8.html)
+- To create the server-key-set
+```
+pki-create-server msql.gautier.org
 
-## Testing
+```
+- To Use with iOS Tap the `.pfx` file, usually shared through the **Files** app.
+- Use with macOS (Keychain Access)
+ - To install dobule click the `.pfx` file on the MacBook.
+ - For each host where the client auth certificate will be used you need to create an "Identity preference"
+- Use with git
+```
+git -c http.sslCert=certificate.crt -c http.sslKey=decrypted.key clone https://host.domain.tld/organization/repository/repo.git
+```
+- Use with curl
+```
+curl -E ./path/to/client.pem https://host.domain.tld
+```
+- Unpack/Manage .pfx file
+ - Ouput the private key
+```
+openssl pkcs12 -in output.pfx -nocerts -out private.key
+```
+ - Output the certificate
+```
+openssl pkcs12 -in output.pfx -clcerts -nokeys -out certificate.crt
+```
+ - Decrypt the key, this should only be done when the key is fully controled
+```
+openssl rsa -in private.key -out decrypted.key
+```
+ - Create .pem file
+```
+cat certificate.crt [private.key|decrypted.key] > client.pem
+```
 
-- Interactive testing guide:  The scripts are prone to bugs during development and to save time in development should be directly symlinked to scripts from repository.
 
-## Implementation 
 
-### Container/Kubernetes
+%privileged         ALL = (ALL) NOPASSWD: /bin/chown
+%privileged         ALL = (ALL) NOPASSWD: /bin/chmod
+%privileged         ALL = (ALL) NOPASSWD: /bin/mkdir
+%privileged         ALL = (ALL) NOPASSWD: /bin/mount
+%privileged         ALL = (ALL) NOPASSWD: /bin/umount
+%privileged         ALL = (ALL) NOPASSWD: /bin/rm
+%privileged         ALL = (ALL) NOPASSWD: /sbin/cryptsetup
+%privileged         ALL = (ALL) NOPASSWD: /sbin/mkfs.ext4
 
-- To run in a container the `--privileged` flag must be used because the encryption uses a loopback device.
+%privileged         ALL = (ALL) NOPASSWD: /usr/bin/pip
+
+%privileged         ALL = (ALL) NOPASSWD: /usr/sbin/sshd
+%privileged         ALL = (ALL) NOPASSWD: /usr/bin/ssh-keygen
+
+%privileged         ALL = (ALL) NOPASSWD: /usr/bin/tee
+
+/usr/bin/certbot certonly --agree-tos --config-dir=/home/pki/ca --email $CERTBOT_EMAIL --manual --manual-auth-hook=/usr/bin/hover-auth-hook --noninteractive --preferred-challenges=dns -d *.$DOMAIN

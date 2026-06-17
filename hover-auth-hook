@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+
+"""hover-auth-hook.py: Authorization hook to update DNS records for letsencrypt.org using dyndns api"""
+
+__author__  = "Adam T. Gautier"
+__license__ = "GPL"
+__version__ = "1.0"
+__maintainer__ = "Adam Gautier"
+__email__ = "adam@gautier.org"
+__status__ = "Development"
+
+import argparse
+import sys
+import os
+import requests
+# import yaml
+# import time
+import fqdn
+
+PREFIX = "_acme-challenge"
+API_URL = "http://dydns.util.svc.cluster.local:8080/field"
+PLUGIN = "hover"
+
+def defaultEnviron(key='PATH'):
+    if key in os.environ.keys():
+        return os.environ[key]
+    else:
+        return None
+
+def updateValidation(domain, name, content, plugin=PLUGIN, url=API_URL):
+    data = '{"plugin":"%s", "domain":"%s", "name":"%s", "content":"%s"}' % (plugin, domain, name, content)
+    try:
+        response = requests.request("post", url, data=data, headers={"Content-Type": "application/json"})
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+    if response.ok:
+        data = response.json()
+        print(data)           
+        if "success" != data['status']:
+            sys.exit(1)
+    else:
+         print(response.status_code, response.text)
+         sys.exit(1)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Update DNS TXT field validation for letsencrypt.org using the dyndns api')
+    parser.add_argument('--validation', default=defaultEnviron('CERTBOT_VALIDATION'),
+                        help='The TXT field validation for _acme-challenge.domain.tld')
+    parser.add_argument('--fqdn', default=defaultEnviron('CERTBOT_DOMAIN'), help='The fully qualified domain name for DNS validation')
+    parser.add_argument('--url', default=API_URL, help='The url for the api endpoint')
+    parser.add_argument('--verbose', action=argparse.BooleanOptionalAction, help='Verbose debugging')
+    
+    args = parser.parse_args()
+    fqdnt = fqdn.parse(args.fqdn)
+    if args.verbose:
+        print("FQDN:%(fqdn)s HOST:%(host)s DOMAIN:%(domain)s TLD:%(tld)s" % fqdnt)
+        print("VAIDATION: %s" % args.validation)
+    updateValidation(domain=fqdnt['domain'], name="%s.%s" % (PREFIX, fqdnt['host']), 
+                     content=args.validation, plugin=PLUGIN, url=args.url)

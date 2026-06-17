@@ -49,12 +49,15 @@ class HoverAPI(object):
                 raise HoverException(body)
             return body
 
-def validate(username=None, password=None, domain=None, validation=None):
+def validate(username=None, password=None, host=None, domain=None, validation=None):
     # connect to the API using your account
     client = HoverAPI(username, password)
     result = client.call("get", "domains/%s/dns" % domain)
+    challenge = "_acme-challenge"
+    if "*" != host:
+        challenge = "%s.%s" % (challenge, host)
     for entry in result["domains"][0]["entries"]:
-        if "_acme-challenge" == entry['name']:
+        if challenge == entry['name']:
             id = entry['id']
             client.call("put", "dns/" + id, {"content": validation})
             # print( entry )
@@ -64,19 +67,31 @@ def defaultEnviron(key='PATH'):
         return os.environ[key]
     else:
         return None
-        
+
+def parseFQDN(fqdn):
+    tokens = fqdn.split(".")
+    domain = None
+    host = "*"
+    if 2 == len(tokens) or 3 == len(tokens):
+        domain = "%s.%s" % (tokens[-2], tokens[-1])
+        if 3 == len(tokens):
+            host = tokens[0]
+    assert domain is not None, "Doman cannot be null"
+    return(host, domain)
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Update DNS TXT field validation for letsencrypt.org.')
     parser.add_argument('--username', default=defaultEnviron('HOVER_USERNAME'), help='The user name of the hover account')
     parser.add_argument('--password', default=defaultEnviron('HOVER_PASSWORD'), help='The password of the hover account')
     parser.add_argument('--validation', default=defaultEnviron('CERTBOT_VALIDATION'),
                         help='The TXT field validation for _acme-challenge.domain.tld')
-    parser.add_argument('--domain', default=defaultEnviron('CERTBOT_DOMAIN'), help='The domain name for DNS validation')
+    parser.add_argument('--fqdn', default=defaultEnviron('CERTBOT_DOMAIN'), help='The fully qualified domain name for DNS validation')
     args = parser.parse_args()
     print(args.username)
     print(args.password)
-    print(args.domain)
+    host, domain = parseFQDN(args.fqdn)
+    print(args.fqdn, host, domain)
     print(args.validation)
     print() ; print()
-    validate(username=args.username, password=args.password, domain=args.domain, validation=args.validation)
+    validate(username=args.username, password=args.password, host=host, domain=domain, validation=args.validation)
 
